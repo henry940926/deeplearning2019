@@ -1,0 +1,140 @@
+#the data is in the following google drive
+
+https://drive.google.com/open?id=18lC9WMU05pWvXL_Cq_bK6XdgnNyZrbD4
+
+from __future__ import print_function
+import keras
+#from keras.datasets import cifar10
+from keras.preprocessing.image import ImageDataGenerator
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Activation, Flatten
+from keras.layers import Conv2D, MaxPooling2D
+import os
+from google.colab import drive
+from zipfile import ZipFile
+
+#mount from google drive
+drive.mount('/content/drive')
+os.chdir('/content/drive/My Drive/deeplearning2019')
+
+
+###Import the training set
+
+import csv
+from PIL import Image
+import os
+import numpy as np
+import csv
+import scipy
+from scipy import ndimage
+import cv2
+import pandas as pd
+
+os.chdir('/content/drive/My Drive/deeplearning2019')
+
+fields = ['image_name', 'count','blur','stain']
+
+df = pd.read_csv('train_label.csv', skipinitialspace=True, usecols=fields)
+os.chdir('/content/drive/My Drive/deeplearning2019/train')
+training_list = [cv2.resize(cv2.cvtColor(cv2.imread(img), cv2.COLOR_BGR2GRAY), (224, 224)) for img in df.image_name]
+
+#import the testing data set
+
+os.chdir('/content/drive/My Drive/deeplearning2019')
+fields = ['image_name', 'count']
+
+dft = pd.read_csv('test_label.csv', skipinitialspace=True, usecols=fields)
+os.chdir('/content/drive/My Drive/deeplearning2019/test')
+testing_list =  [cv2.resize(cv2.cvtColor(cv2.imread(img), cv2.COLOR_BGR2GRAY), (224, 224)) for img in dft.image_name]
+
+
+#define a function add a demension to the grey picture(repeated the last )
+def grytocolor(img): 
+  stacked_img = np.stack((img,)*3, axis=-1)
+  return stacked_img
+
+# array x and normalize train&test
+train_x = np.array(list(map(grytocolor, training_list)))
+trainx = train_x / 255.
+trainy =  np.array(df["count"])
+
+test_x = np.array(list(map(grytocolor, testing_list)))
+testx = test_x / 255.
+testy = np.array(dft["count"])
+
+#load resnet50
+
+from keras.applications.resnet50 import ResNet50 
+from keras.applications.vgg16 import VGG16
+from keras.preprocessing import image
+from keras.applications.resnet50 import preprocess_input,decode_predictions
+import numpy as np
+
+# load model (stack 3 times to create more layers)
+base_model.reset_states()
+base_model = ResNet50(weights = 'imagenet')
+base_model = ResNet50(weights = 'imagenet')
+base_model = ResNet50(weights = 'imagenet')
+
+#base_model = VGG16(weights = 'imagenet') #something tried but failed
+#base_model.summary()
+from keras.models import Model
+model = Model(inputs=base_model.input, outputs=base_model.get_layer('add_48').output)
+# model.summary()
+
+from keras.layers import Dense, GlobalAveragePooling2D
+
+# add a global spatial average pooling layer
+x = model.output
+# let's add a fully-connected layer
+x = Dense(2048, activation='relu')(x)
+x = GlobalAveragePooling2D()(x)
+#x = Dense(1000, activation='relu')(x)
+predictions = Dense(1, activation='relu')(x)
+# this is the model we will train
+Second_model = Model(inputs=model.input, outputs=predictions)
+
+# first: train only the top layers (which were randomly initialized)
+# for layer in model.layers:
+#     layer.trainable = False
+    
+# we chose to train the top 2 inception blocks, i.e. we will freeze
+# the first 249 layers and unfreeze the rest:
+# for layer in model.layers[:249]:
+#    layer.trainable = False
+# for layer in model.layers[249:]:
+#    layer.trainable = True
+
+
+#compile model
+
+#from keras.optimizers import Adam
+Second_model.compile(
+    loss='mean_squared_error',
+    optimizer='adam'
+)
+
+#train
+batch_size = 16
+epochs  = 50
+history = Second_model.fit(trainx,trainy, validation_split = 0.2, epochs = epochs, 
+          batch_size = batch_size)
+          
+
+#check test set
+Second_model.evaluate(testx, testy)
+
+
+#plot the result
+import matplotlib.pyplot as plt
+plot = history
+plt.plot(plot.history['loss'])
+plt.plot(plot.history['val_loss'])
+plt.title('Model loss')
+plt.ylabel('Loss')
+plt.xlabel('Epoch')
+plt.legend(['Train', 'Validion'], loc='upper right')
+plt.show()
+
+
+
